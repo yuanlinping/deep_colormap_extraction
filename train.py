@@ -22,27 +22,29 @@ logger.disabled = True
 
 #parse parameters
 parser = argparse.ArgumentParser(description='train deep color extraction model')
-parser.add_argument('--mode', default=0, type=int)
-parser.add_argument('--backbone', default="vgg", type=str)
-parser.add_argument('--net_name', default="VGG+ASPP+2D", type=str)
-parser.add_argument('--trained_model_config', default="", type=str)  # used for resuming to train network
-parser.add_argument('--cuda_device', default=3, type=int)
-
+parser.add_argument('--mode', default=2, type=int) ## mode 0: lab 3D histogram; mode 1: lab 2D histogram as input; mode 2: original images with png format
+parser.add_argument('--backbone', default="resnet18", type=str) ## "resnet18" or "vgg"
+parser.add_argument('--net_name', default="resnet18+ASPP+2D", type=str)
 parser.add_argument('--with_aspp', default=True, choices=('True','False'))
-parser.add_argument('--legend_width', default=256, type=int)
-parser.add_argument('--legend_height', default=10, type=int)
+parser.add_argument('--trained_model_config', default="", type=str)  # used for resuming to train network
 
+parser.add_argument('--legend_width', default=512, type=int)
+parser.add_argument('--legend_height', default=20, type=int)
+
+parser.add_argument('--image_width', default=512, type=int)
+parser.add_argument('--image_height', default=256, type=int)
+
+parser.add_argument('--cuda_device', default=0, type=int)
 parser.add_argument('--lr', default=1e-4, type=float)
 parser.add_argument('--train_bs',default=8, type=int)
 parser.add_argument('--num_epochs', default=15, type=int)
 parser.add_argument('--color_space', default="Lab", type=str)  # possible value: "Lab", "Rgb"
-parser.add_argument('--is_label_normalized', default=True, choices=('True','False'))
 parser.add_argument('--loss_function', default="MSE", type=str)
 
 parser.add_argument('--prefix', default="", type=str)
 
 opt = parser.parse_args()
-IS_LABEL_NORMALIZED = opt.is_label_normalized == 'True'
+# IS_LABEL_NORMALIZED = opt.is_label_normalized == 'True'
 WITH_ASPP = opt.with_aspp == 'True'
 
 LEARNING_RATE = opt.lr
@@ -61,6 +63,7 @@ LOSS_FUNCTION = opt.loss_function
 
 PREFIX = opt.prefix # used in inference.py
 
+IS_LABEL_NORMALIZED = True
 IS_NOT_DEBUG = True
 USE_VISDOM = True
 
@@ -69,12 +72,12 @@ IMAGE_WIDTH = 32
 IMAGE_HEIGHT = 32
 IMAGE_CHANNEL = 32
 if (MODE == 1): # lab 2D histogram
-    IMAGE_WIDTH = 128
-    IMAGE_HEIGHT = 128
+    IMAGE_WIDTH = opt.image_width
+    IMAGE_HEIGHT = opt.image_height
     IMAGE_CHANNEL = 1
 elif (MODE == 2):   # lab original images
-    IMAGE_WIDTH = 256
-    IMAGE_HEIGHT = 128
+    IMAGE_WIDTH = opt.image_width
+    IMAGE_HEIGHT = opt.image_height
     IMAGE_CHANNEL = 3
 
 LABEL_WIDTH = opt.legend_width
@@ -123,9 +126,11 @@ if MODE == 1:
         color_space=COLOR_SPACE,
         is_label_normalized=IS_LABEL_NORMALIZED)
 elif MODE == 2:
-    train_set = PNG_PNG_Dataset(label_paras ={'width':LABEL_WIDTH,'height':LABEL_HEIGHT,'channel':LABEL_CHANNEL},
+    train_set = PNG_PNG_Dataset(image_paras={'width':IMAGE_WIDTH,'height':IMAGE_HEIGHT,'channel':IMAGE_CHANNEL},
+        label_paras ={'width':LABEL_WIDTH,'height':LABEL_HEIGHT,'channel':LABEL_CHANNEL},
                                 color_space=COLOR_SPACE, is_label_normalized=IS_LABEL_NORMALIZED)
-    eval_set = PNG_PNG_Dataset(label_paras ={'width':LABEL_WIDTH,'height':LABEL_HEIGHT,'channel':LABEL_CHANNEL},file_list="./dataset/evaluation.txt",
+    eval_set = PNG_PNG_Dataset(image_paras={'width':IMAGE_WIDTH,'height':IMAGE_HEIGHT,'channel':IMAGE_CHANNEL},
+        label_paras ={'width':LABEL_WIDTH,'height':LABEL_HEIGHT,'channel':LABEL_CHANNEL},file_list="./dataset/evaluation.txt",
                                color_space=COLOR_SPACE, is_label_normalized=IS_LABEL_NORMALIZED)
 
 train_loader = DataLoader(train_set, batch_size=BATCH_SIZE, shuffle=IS_NOT_DEBUG, num_workers=2, drop_last=True)
@@ -238,6 +243,8 @@ def train():
             'time_used': time_used_cumulation,
             'loss_for_each_epoch':loss_for_each_epoch
         }, model_path)
+
+        eval(epoch)
 
 
 def eval(epoch):
